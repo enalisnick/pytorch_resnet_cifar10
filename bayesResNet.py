@@ -34,6 +34,8 @@ import torch.nn.init as init
 
 from torch.autograd import Variable
 
+from layers.BayesConv import BayesConv
+
 __all__ = ['ResNet', 'resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110', 'resnet1202']
 
 def _weights_init(m):
