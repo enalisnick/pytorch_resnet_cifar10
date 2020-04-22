@@ -33,8 +33,10 @@ import torch.nn.functional as F
 import torch.nn.init as init
 
 from torch.autograd import Variable
+from torch.nn import Parameter
 
-from layers.BayesConv import BayesConv
+from layers.BayesConv import BBBConv2d
+from layers.BayesLinear import BBBLinear
 
 __all__ = ['ResNet', 'resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110', 'resnet1202']
 
@@ -57,11 +59,11 @@ class LambdaLayer(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1, option='A'):
+    def __init__(self, in_planes, planes, stride=1, scale_init=1., option='A'):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1 = BBBConv2d(in_planes, planes, kernel_size=3, scale_init=scale_init, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = BBBConv2d(planes, planes, kernel_size=3, scale_init=scale_init, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
@@ -70,11 +72,10 @@ class BasicBlock(nn.Module):
                 """
                 For CIFAR10 ResNet paper uses option A.
                 """
-                self.shortcut = LambdaLayer(lambda x:
-                                            F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
+                self.shortcut = LambdaLayer(lambda x: F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
             elif option == 'B':
                 self.shortcut = nn.Sequential(
-                     nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                     nn.BBBConv2d(in_planes, self.expansion * planes, kernel_size=1, scale_init=scale_init, stride=stride, bias=False),
                      nn.BatchNorm2d(self.expansion * planes)
                 )
 
@@ -86,25 +87,31 @@ class BasicBlock(nn.Module):
         return out
 
 
-class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
-        super(ResNet, self).__init__()
+class BayesResNet(nn.Module):
+    def __init__(self, block, num_blocks, num_classes=10, model_type="extended", tau_init=1.):
+        super(BayesResNet, self).__init__()
         self.in_planes = 16
+        self.model_type = model_type
 
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
+        if self.model_type=="extended":
+            self.global_tau = Parameter(torch.Tensor(1).fill_(tau_init), requires_grad=True)
+        elif self.model_type=="base":
+            self.global_tau = Parameter(torch.zeros(1), requires_grad=False)
+
+        self.conv1 = BBBConv2d(3, 16, kernel_size=3, scale_init=self.global_tau, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
-        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
-        self.linear = nn.Linear(64, num_classes)
+        self.layer1 = self._make_layer(block, 16, num_blocks[0], scale_init=self.global_tau, stride=1)
+        self.layer2 = self._make_layer(block, 32, num_blocks[1], scale_init=self.global_tau, stride=2)
+        self.layer3 = self._make_layer(block, 64, num_blocks[2], scale_init=self.global_tau, stride=2)
+        self.linear = BBBLinear(64, num_classes, scale_init=self.global_tau)
 
-        self.apply(_weights_init)
+        #self.apply(_weights_init)
 
-    def _make_layer(self, block, planes, num_blocks, stride):
+    def _make_layer(self, block, planes, num_blocks, scale_init, stride):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
         for stride in strides:
-            layers.append(block(self.in_planes, planes, stride))
+            layers.append(block(self.in_planes, planes, stride, scale_init))
             self.in_planes = planes * block.expansion
 
         return nn.Sequential(*layers)
@@ -117,11 +124,17 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out = self.linear(out)
+        
+        if self.model_type=="extended":
+            out = F.softmax(out)
+        elif self.model_type=="base":
+            out = F.log_softmax(out)
+
         return out
 
 
-def resnet20():
-    return ResNet(BasicBlock, [3, 3, 3])
+def resnet20(model_type="extended", tau_init=1.):
+    return BayesResNet(BasicBlock, [3, 3, 3], model_type=model_type, tau_init=tau_init)
 
 
 def resnet32():
