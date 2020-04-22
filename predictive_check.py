@@ -61,7 +61,7 @@ def main():
     expected_probs = train(train_loader, model)
     print(expected_probs)
     print(np.sum(expected_probs))
-    pkl.dump(expected_probs, open("predCheck_HeScaling_temp.pkl", "wb"))
+    pkl.dump(expected_probs, open("predCheck_artifacts/predCheck_HeScaling_3_wBN.pkl", "wb"))
     
     
 
@@ -69,6 +69,9 @@ def train(train_loader, model):
 
     prob_tracker = np.zeros((10,))
     batch_counter = 0
+
+    # need train mode to activate BatchNorm
+    model.train() 
 
     for i, (input, target) in enumerate(train_loader):
 
