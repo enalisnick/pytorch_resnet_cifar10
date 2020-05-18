@@ -1,0 +1,51 @@
+import matplotlib.pyplot as plt
+import pickle as pkl
+import autograd.numpy as np
+from autograd import grad
+from numpy.random import multivariate_normal, randint
+from scipy.stats import expon, cauchy, gamma, norm 
+
+
+# global features
+X = np.linspace(-4, 4, 100)[np.newaxis].T
+
+
+def main():
+    # base string
+    #base_file_name = "hs-1_samples_100h_L-" 
+    base_file_name = "norm-.5_samples_100h_L-" 
+    #base_file_name = "norm-1_samples_100h_L-"
+    #base_file_name = "predCP-LC3_samples_100h_L-"
+
+    f_samples = []
+    for l in [5, 10, 15, 20]:
+        f_samples.append(pkl.load(open("%s%d.pkl"%(base_file_name, l), "rb")))
+
+        
+    plt.figure(figsize=(15, 3))
+
+    for idx, l in enumerate([5, 10, 15, 20]):
+        plt.subplot(1, 4, idx+1)
+        for s in range(len(f_samples[0])):
+            plt.plot(X, f_samples[idx][s], 'k-', linewidth=5., alpha=.3)
+
+        plt.xlim([-4, 4])
+        plt.ylim([-.2, .2])
+        if idx==0:
+            plt.ylabel(r"$Y$", fontsize=18)
+        else:
+            plt.yticks([])
+        plt.xlabel(r"$X$", fontsize=18)
+        plt.title("%d Hidden Layers"%(l), fontsize=15)
+
+    
+        plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+
+    plt.show()
+
+
+
+
+
+if __name__ == '__main__':
+    main()

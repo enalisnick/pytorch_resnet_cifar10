@@ -3,7 +3,7 @@ import pickle as pkl
 import autograd.numpy as np
 from autograd import grad
 from numpy.random import multivariate_normal, randint
-from scipy.stats import expon, cauchy, gamma, norm 
+from scipy.stats import expon, cauchy, gamma, norm, halfcauchy 
 
 def relu(x):
     return np.maximum(0, x)
@@ -11,7 +11,7 @@ def relu(x):
 def softplus(x):
     return np.log(1 + np.exp(-np.abs(x))) + np.maximum(x,0)
 
-def sample_log_cauchy(loc=0., scale=10.):
+def sample_log_cauchy(loc=0., scale=5.):
     return np.exp(cauchy.rvs(loc=loc, scale=scale))
 
 def sample_exponential(a=0.5):
@@ -65,12 +65,12 @@ def fprop(tau, prev_taus, n_layers, n_hid_units, is_ResNet, batch_norm=True,):
 
 def main():
     # NN architecture
-    n_layers = 12
+    n_layers = 5
     n_hid_units = 100
     is_ResNet = False 
     
     # num samples to draw
-    n_samples = 10
+    n_samples = 5
     
     # define KLD prior
     kld_sampler = sample_log_cauchy
@@ -84,10 +84,10 @@ def main():
         print("getting sample #%d"%(s_idx+1))
         prior_samples[:, s_idx] = sample_prior(kld_sampler, n_layers, n_hid_units, is_ResNet)
 
-    #prior_samples = pkl.load(open("tau_samples_%dL_%dh.pkl"%(n_layers, n_hid_units), "rb"))
+    #prior_samples = pkl.load(open("tau_samples_%dL_%dh_LC-10.pkl"%(n_layers, n_hid_units), "rb"))
     print("Prior samples:")
     print(prior_samples)
-    pkl.dump(prior_samples, open("tau_samples_%dL_%dh_LC-10.pkl"%(n_layers, n_hid_units), "wb"))
+    #pkl.dump(prior_samples, open("tau_samples_%dL_%dh_LC-10.pkl"%(n_layers, n_hid_units), "wb"))
 
 
     # SAMPLE FUNCTIONS
@@ -96,16 +96,18 @@ def main():
     stdNorm_sample_functions = []
     for s_idx in range(n_samples):
         predCP_sample_functions.append(fprop(None, prior_samples[:, s_idx], n_layers, n_hid_units, is_ResNet))
-        stdNorm_sample_functions.append(fprop(None, np.ones((n_layers,)), n_layers, n_hid_units, is_ResNet))
+        #stdNorm_sample_functions.append(fprop(None, halfcauchy.rvs(loc=0, scale=1, size=n_layers), n_layers, n_hid_units, is_ResNet)) 
+        #fprop(None, np.ones((n_layers,)) * .5, n_layers, n_hid_units, is_ResNet))
 
     #print(predCP_sample_functions)
+    pkl.dump(predCP_sample_functions, open("function_prior_visuals/predCP-LC5_samples_%dh_L-%d.pkl"%(n_hid_units, n_layers), "wb"))  
         
         
     # visualize samples
     plt.figure(figsize=(4.2,3.5))
 
     for idx in range(n_samples):
-        plt.plot(X, stdNorm_sample_functions[idx], 'k-', linewidth=5., alpha=.3, zorder=0)
+        #plt.plot(X, stdNorm_sample_functions[idx], 'k-', linewidth=5., alpha=.3, zorder=0)
         plt.plot(X, predCP_sample_functions[idx], 'r-', linewidth=5., alpha=.7, zorder=10) 
 
     # dummy lines for legend
@@ -114,7 +116,7 @@ def main():
     plt.plot(X, [-1000 for x in range(X.shape[0])], 'r-', linewidth=5., alpha=.9, label="LC-PredCP")
 
     plt.xlim([-4, 4])
-    plt.ylim([-.2, .2])
+    plt.ylim([-1, 1])
     plt.ylabel(r"$Y$", fontsize=20)
     plt.xlabel(r"$X$", fontsize=20)
 
